@@ -93,6 +93,7 @@ button:disabled { cursor: default; }
 .keep-inner { max-width: 520px; margin: 0 auto; padding: 8px 24px 32px; display: flex; flex-direction: column; align-items: flex-start; }
 .keep h1 { font-weight: 400; font-size: 26px; line-height: 1.15; margin: 12px 0 12px; }
 .keep p { margin: 0 0 10px; color: var(--marker-faded); }
+.keep .keep-place { color: var(--marker); font-size: 16px; }
 .keep .ios { font-size: 17px; }
 .keep .actions { display: flex; flex-direction: column; align-items: flex-start; margin-top: 14px; }
 .keep .confirm { margin-top: 14px; }
@@ -100,6 +101,7 @@ button:disabled { cursor: default; }
 .keep .fine { font-size: 17px; }
 .keep .row { justify-content: flex-start; gap: 32px; }
 .keep .message { margin-top: 8px; color: var(--marker); font-size: 17px; min-height: 1.3em; }
+.keep .keep-privacy { margin-top: 18px; }
 
 .panel { left: 0; top: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; }
 .panel.visible { pointer-events: auto; }

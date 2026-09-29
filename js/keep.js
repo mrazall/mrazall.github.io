@@ -18,6 +18,7 @@ export function mountKeepScreen(root, store, { onBack }) {
       <div class="keep-inner">
         <button class="link small back">← назад</button>
         <h1>карта хранится в этом браузере</h1>
+        <p class="keep-place">кофейня «Он мой» · просп. Мира, 45, Москва</p>
         <p>как бумажная: без аккаунта, и у кофейни копии нет. если очистить данные браузера или сменить телефон, карта пропадёт.</p>
         <p>сохраните её в файл — например, в облако или себе в мессенджер — и откройте этот файл на новом телефоне, в приложении или на этом сайте.</p>
         <p class="ios" hidden>на iPhone добавьте сайт на экран «Домой» (поделиться → на экран «Домой»): так Safari не сотрёт карту. карта на экране «Домой» и карта во вкладке Safari хранятся отдельно — перенесите её файлом.</p>
@@ -31,6 +32,7 @@ export function mountKeepScreen(root, store, { onBack }) {
           <div class="row"><button class="link underline yes">заменить</button><button class="link underline no">отмена</button></div>
         </div>
         <p class="message" role="status"></p>
+        <p class="keep-privacy"><a class="link small underline" href="privacy.html">политика конфиденциальности</a></p>
         <input type="file" accept=".json,application/json,text/plain" hidden>
       </div>
     </section>`);
