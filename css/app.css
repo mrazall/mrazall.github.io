@@ -1,0 +1,124 @@
+/* Фирменная система карты «КОФЕ ОН МОЙ» (DESIGN_SPEC.md): красный карты, чернила, белый маркер, стол. */
+@font-face {
+  font-family: "Neucha";
+  src: url("../assets/neucha.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root {
+  --red: #e3352a;
+  --ink: #261614;
+  --marker: #f7f0e8;
+  --marker-faded: rgba(247, 240, 232, 0.6);
+  --table: #1b1413;
+  --hand: "Neucha", "Comic Sans MS", cursive;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+a.link { color: inherit; text-decoration: none; display: inline-flex; align-items: center; }
+html, body { margin: 0; height: 100%; background: var(--table); color: var(--marker); overscroll-behavior: none; }
+body { font: 21px/1.25 var(--hand); -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:disabled { cursor: default; }
+:focus-visible { outline: 2px solid var(--marker); outline-offset: 3px; }
+
+#app { position: fixed; inset: 0; }
+.splash { position: absolute; inset: 0; background: var(--red); }
+
+.screen {
+  position: absolute;
+  inset: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* «Кнопка» карты: рукописное слово с неровным подчёркиванием. */
+.link {
+  position: relative;
+  min-height: 48px;
+  padding: 8px 6px;
+  font-size: 21px;
+  transition: opacity 0.12s, transform 0.12s;
+}
+.link.small { font-size: 17px; }
+.link.underline::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 2px;
+  bottom: 9px;
+  height: 7px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 7' preserveAspectRatio='none'%3E%3Cpath d='M1 4 C 20 5.5, 40 2.5, 60 4 S 90 3, 99 2' fill='none' stroke='%23F7F0E8' stroke-width='1.6' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") no-repeat center / 100% 100%;
+}
+.link:active { opacity: 0.55; transform: scale(0.96); }
+.link:disabled { opacity: 0.35; }
+
+/* ── главный экран: карта на столе */
+.card-screen { background: var(--table); overflow: hidden; }
+.stage { position: absolute; inset: 0; }
+.stage > * { position: absolute; }
+
+.card-slot { left: 0; top: 0; perspective: 1500px; cursor: pointer; outline: none; }
+.lift, .flip { position: absolute; inset: 0; transform-style: preserve-3d; }
+.face {
+  position: absolute;
+  inset: 0;
+  border-radius: 1.9% / 3%;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: 0 var(--shadow-y, 6px) var(--shadow-blur, 14px) rgba(0, 0, 0, 0.45);
+}
+.face canvas { display: block; width: 100%; height: 100%; }
+.face.back { transform: rotateY(180deg); }
+.shade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+
+.topbar { left: 0; right: 0; top: 0; height: 52px; display: flex; justify-content: space-between; align-items: center; padding: 0 8px; opacity: 0; pointer-events: none; }
+.topbar.visible { pointer-events: auto; }
+.sheets { display: flex; align-items: center; gap: 2px; color: var(--marker-faded); font-size: 17px; }
+.sheets .link { font-size: 24px; min-width: 36px; }
+
+.chrome { left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 0 24px; text-align: center; }
+.chrome .hint { margin: 0; font-size: 17px; color: rgba(247, 240, 232, 0.55); }
+.gift-badge { display: flex; align-items: center; gap: 6px; }
+.gift-badge canvas { width: 34px; height: 34px; }
+
+/* iPhone в Safari: карту надёжнее держать на экране «Домой» — иначе Safari может стереть данные сайта. */
+.keep-hint { left: 24px; right: 24px; bottom: max(4px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; text-align: center; }
+.keep-hint p { margin: 0; font-size: 14px; line-height: 1.3; color: rgba(247, 240, 232, 0.45); }
+
+/* ── «карта хранится в этом браузере»: сохранить / восстановить */
+.keep { background: var(--table); overflow-y: auto; }
+.keep-inner { max-width: 520px; margin: 0 auto; padding: 8px 24px 32px; display: flex; flex-direction: column; align-items: flex-start; }
+.keep h1 { font-weight: 400; font-size: 26px; line-height: 1.15; margin: 12px 0 12px; }
+.keep p { margin: 0 0 10px; color: var(--marker-faded); }
+.keep .ios { font-size: 17px; }
+.keep .actions { display: flex; flex-direction: column; align-items: flex-start; margin-top: 14px; }
+.keep .confirm { margin-top: 14px; }
+.keep .confirm .question { color: var(--marker); }
+.keep .fine { font-size: 17px; }
+.keep .row { justify-content: flex-start; gap: 32px; }
+.keep .message { margin-top: 8px; color: var(--marker); font-size: 17px; min-height: 1.3em; }
+
+.panel { left: 0; top: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; }
+.panel.visible { pointer-events: auto; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 48px; font-size: 17px; color: var(--marker-faded); }
+.panel-head .status { padding-left: 2px; }
+.pad { display: block; }
+.caption { margin: 6px 0 0; font-size: 17px; color: var(--marker-faded); min-height: 1.3em; text-align: center; }
+.caption.alert { color: var(--marker); }
+.row { display: flex; justify-content: center; gap: 40px; }
+.row.tight { gap: 26px; }
+.gift-offer { text-align: center; padding: 0 24px; display: flex; flex-direction: column; align-items: center; }
+.gift-offer canvas.ring { width: 96px; height: 96px; margin-bottom: 10px; }
+.gift-offer h2 { font-weight: 400; font-size: 26px; margin: 0; }
+.gift-offer .fine { font-size: 14px; color: var(--marker-faded); margin: 8px 0 0; }
+.panel-inner { display: flex; flex-direction: column; align-items: center; animation: panel-in 0.24s 0.06s both; }
+@keyframes panel-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .panel-inner { animation: none; }
+  .link { transition: none; }
+}
+
+#flight { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }

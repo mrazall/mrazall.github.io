@@ -1,0 +1,17 @@
+{
+  "name": "кофе он мой",
+  "short_name": "кофе он мой",
+  "description": "Карта лояльности кофейни «КОФЕ ОН МОЙ»",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1B1413",
+  "theme_color": "#1B1413",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
