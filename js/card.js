@@ -1,7 +1,7 @@
 // Стороны карты на <canvas> — порт CardFaces.kt: слои с фотографии карты, сетка 5×6, кольца.
 
 import { COLUMNS, CELLS, ROWS, STRIP_LEFT, cellInk, cellRect, cellStroke, giftNumberFor, ringCenter, ringInk, ringRadius } from "./geometry.js";
-import { COLORS, drawMarkerStroke, drawStamp, fallbackMark, handCircle, paperPattern } from "./marker.js";
+import { COLORS, drawStamp, fallbackMark, paperPattern } from "./marker.js";
 
 const art = {};
 
@@ -97,8 +97,8 @@ function drawFrontCounter(ctx, w, h, card) {
   // Подарок этого ряда взят авансом — на кольце рисунок бариста.
   const ahead = card.giftDrawings.get(card.currentRow);
   if (ahead) drawStamp(ctx, ahead, { x: cx - ring * 0.43, y: cy - ring * 0.43, w: ring * 0.86, h: ring * 0.86 });
+  // Кольца не обводятся: о ждущем подарке говорит строка под картой, здесь — только счёт, если их несколько.
   if (card.available > 0) {
-    drawMarkerStroke(ctx, handCircle(cx, cy, ring * 0.56, 1), ring * 0.13);
     if (card.available > 1) {
       ctx.fillStyle = COLORS.marker;
       ctx.font = `${cell * 0.9}px Neucha, cursive`;
@@ -162,11 +162,9 @@ export function renderBack(canvas, card, opts = {}) {
       ctx.scale(scale, scale);
       ctx.translate(-c.x, -c.y);
     }
-    if (number <= card.earned) {
-      // Ряд заполнен — кольцо обведено белым маркером (у ждущего подарка — пульсирует).
-      drawMarkerStroke(ctx, handCircle(c.x, c.y, radius * 1.02, number), radius * 0.2, pulsing && state === "unused" ? 0.55 + 0.45 * pulse : 1);
-    } else if (giftFocus?.number === number && !state) {
-      // Подарок авансом: кольцо ещё не заработано — мерцает, как ячейка под отметку.
+    // Кольца не обводятся. Кольцо, на котором сейчас рисует бариста (заработанный подарок
+    // или авансом), мерцает изнутри — как ячейка под отметку.
+    if (giftFocus?.number === number && state !== "used") {
       ctx.fillStyle = `rgba(247,240,232,${pulsing ? 0.1 + 0.2 * pulse : 0.2})`;
       ctx.beginPath();
       ctx.arc(c.x, c.y, radius * 0.82, 0, 2 * Math.PI);
