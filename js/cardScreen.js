@@ -2,7 +2,7 @@
 // Карта лежит на «столе»; касание → подъём, 3D-переворот, карта едет наверх, под ней — холст бариста.
 // После отметки холст сразу готов к следующей: несколько отметок подряд — без повторного переворота.
 
-import { Animated, FAST_OUT_SLOW_IN, FLIP, LINEAR_OUT_SLOW_IN, lerp, springPop, wait } from "./anim.js";
+import { FAST_OUT_SLOW_IN, FLIP, LINEAR_OUT_SLOW_IN, bake, finished, lerp, reduced, springValue } from "./anim.js";
 import { inkImage, renderBack, renderFront, ringImage } from "./card.js";
 import { ASPECT, ROWS, cellInk, cellOf, cellRect, cellStroke, ringCenter, ringInk, ringRadius, sheetOf, sheetOfGift } from "./geometry.js";
 import { COLORS, drawStamp, pixelRatio } from "./marker.js";
@@ -136,13 +136,11 @@ export function mountCardScreen(root, store) {
   /** Подарок выдаётся авансом — за ряд, который ещё не заполнен. */
   const giftAhead = () => !!s.focusGift && !!card() && s.focusGift > card().earned;
 
-  // ── анимируемые величины
-  const rotation = new Animated(0, frame);
-  const liftA = new Animated(0, frame);
-  const move = new Animated(0, frame);
-  const panelA = new Animated(0, frame);
+  // ── анимируемые величины: поворот (градусы), подъём, переезд наверх и панель (0..1)
+  const v = { rot: 0, lift: 0, move: 0, panel: 0 };
 
   let popToken = 0;
+  let popAnim = null;
   let L = null;
   let dpr = 1;
 
@@ -169,44 +167,105 @@ export function mountCardScreen(root, store) {
     if (panelMode) renderPanel(true);
   }
 
-  /** Кадр анимации: положение карты, поворот, подъём, затенение, панель. */
-  function frame() {
-    if (!L) return;
-    const box = lerpRect(L.view, L.open, move.value);
-    slot.style.transform = `translate3d(${box.x}px, ${box.y}px, 0) scale(${box.w / L.view.w})`;
-    const r = rotation.value;
-    liftEl.style.transform = `scale(${1 + 0.05 * liftA.value})`;
-    flipEl.style.transform = `rotateY(${r}deg)`;
-    const shade = (1 - Math.abs(Math.cos((r * Math.PI) / 180))) * 0.35;
-    shades.forEach((x) => (x.style.opacity = shade));
+  /**
+   * Вид всех движущихся слоёв для значений `x` — только transform и opacity, чтобы их мог
+   * проигрывать графический поток.
+   */
+  function stylesFor(x) {
+    const box = lerpRect(L.view, L.open, x.move);
+    const shade = (1 - Math.abs(Math.cos((x.rot * Math.PI) / 180))) * 0.35;
     // Блик на глянцевом логотипе: два «окна» едут по карте, внутри каждого — неподвижная белая копия
     // логотипа (окно сдвигается вправо, копия на столько же влево). Только transform, без масок.
-    const sheenOn = r > 1 && r < 90;
-    if (sheenOn !== sheenShown) {
-      sheenShown = sheenOn;
-      sheenEl.style.visibility = sheenOn ? "visible" : "hidden";
-    }
-    if (sheenOn) {
-      const x = (-0.5 + (r / 90) * 1.8) * L.view.w;
-      sheenBands.forEach((band, i) => {
-        const bx = x + (i ? 0.09 * L.view.w : 0); // яркая сердцевина — по центру широкой полосы
-        band.style.transform = `translate3d(${bx}px, 0, 0)`;
-        band.firstChild.style.transform = `translate3d(${-bx}px, 0, 0)`;
-      });
+    const sx = (-0.5 + (x.rot / 90) * 1.8) * L.view.w;
+    const core = sx + 0.09 * L.view.w; // яркая сердцевина — по центру широкой полосы
+    const near = Math.max(0, Math.min(1, 1 - x.move * 2.2));
+    return {
+      slot: { transform: `translate3d(${box.x}px, ${box.y}px, 0) scale(${box.w / L.view.w})` },
+      lift: { transform: `scale(${1 + 0.05 * x.lift})` },
+      flip: { transform: `rotateY(${x.rot}deg)` },
+      shade: { opacity: shade },
+      sheen: { opacity: x.rot > 1 && x.rot < 90 ? 1 : 0 },
+      band0: { transform: `translate3d(${sx}px, 0, 0)` },
+      ink0: { transform: `translate3d(${-sx}px, 0, 0)` },
+      band1: { transform: `translate3d(${core}px, 0, 0)` },
+      ink1: { transform: `translate3d(${-core}px, 0, 0)` },
+      near: { opacity: near },
+      topbar: { opacity: x.move },
+      panel: { opacity: x.panel, transform: `translate3d(0, ${(1 - x.panel) * 28}px, 0)` },
+    };
+  }
+
+  const layers = [
+    [slot, "slot"], [liftEl, "lift"], [flipEl, "flip"], [shades[0], "shade"], [shades[1], "shade"],
+    [sheenEl, "sheen"], [sheenBands[0], "band0"], [sheenBands[0].firstChild, "ink0"],
+    [sheenBands[1], "band1"], [sheenBands[1].firstChild, "ink1"],
+    [chrome, "near"], [keepHint, "near"], [topbar, "topbar"], [panelEl, "panel"],
+  ];
+
+  /** То, что не анимируется: доступность нажатий. */
+  function applyToggles(x) {
+    chrome.style.pointerEvents = keepHint.style.pointerEvents = x.move < 0.01 ? "auto" : "none";
+    topbar.classList.toggle("visible", x.move > 0.5);
+    panelEl.classList.toggle("visible", x.panel > 0.5);
+  }
+
+  /** Поставить слои в положение текущих значений (без анимации). */
+  function frame() {
+    if (!L) return;
+    const st = stylesFor(v);
+    for (const [node, key] of layers) Object.assign(node.style, st[key]);
+    applyToggles(v);
+  }
+
+  /**
+   * Сыграть сценарий: отрезки вида { key, start, dur, to, ease } (мс; по каждой величине — по порядку).
+   * Вся траектория рассчитывается заранее и отдаётся браузеру (см. bake в anim.js).
+   * cues — [{ at, fn }]: действия по ходу сценария. Новый сценарий подхватывает движение с текущего места.
+   */
+  let timeline = null;
+  function play(segments, total, cues = []) {
+    const from = timeline ? timeline.at(performance.now() - timeline.start) : { ...v };
+    stopTimeline();
+    const at = (ms) => {
+      const x = { ...from };
+      for (const seg of segments) {
+        if (ms < seg.start) continue;
+        const p = Math.min(1, (ms - seg.start) / seg.dur);
+        x[seg.key] = lerp(x[seg.key], seg.to, seg.ease(p));
+      }
+      return x;
+    };
+    const end = at(total);
+    if (reduced() || !slot.animate || !L) {
+      Object.assign(v, end);
+      frame();
+      cues.forEach((c) => c.fn());
+      return Promise.resolve(true);
     }
 
-    const m = move.value;
-    chrome.style.opacity = keepHint.style.opacity = Math.max(0, Math.min(1, 1 - m * 2.2));
-    chrome.style.pointerEvents = keepHint.style.pointerEvents = m < 0.01 ? "auto" : "none";
-    topbar.style.opacity = m;
-    topbar.classList.toggle("visible", m > 0.5);
-    panelEl.style.opacity = panelA.value;
-    panelEl.style.transform = `translateY(${(1 - panelA.value) * 28}px)`;
-    panelEl.classList.toggle("visible", panelA.value > 0.5);
+    const anims = layers.map(([node, key]) => bake(node, total, (t) => stylesFor(at(t * total))[key]));
+    const me = { at, start: performance.now(), anims, timers: [] };
+    timeline = me;
+    for (const c of cues) me.timers.push(setTimeout(c.fn, c.at));
+    me.timers.push(setInterval(() => applyToggles(at(performance.now() - me.start)), 50));
+    return Promise.all(anims.map(finished)).then(() => {
+      if (timeline !== me) return false;
+      // Конечное положение — в обычные стили, затем анимации можно снять без скачка.
+      Object.assign(v, end);
+      frame();
+      stopTimeline();
+      return true;
+    });
+  }
+
+  function stopTimeline() {
+    if (!timeline) return;
+    timeline.timers.forEach((t) => (clearTimeout(t), clearInterval(t)));
+    timeline.anims.forEach((a) => a?.cancel());
+    timeline = null;
   }
 
   /** Белая копия логотипа для блика — рисуется один раз на размер карты. */
-  let sheenShown = false;
   function bakeSheen() {
     const img = inkImage();
     for (const band of sheenBands) {
@@ -496,17 +555,17 @@ export function mountCardScreen(root, store) {
   async function open() {
     set({ stage: "opening" });
     // 1) карта приподнимается  2) переворачивается и едет наверх  3) проявляется поле отметки
-    await liftA.to(1, 160, FAST_OUT_SLOW_IN);
-    await Promise.all([
-      rotation.to(180, 620, FLIP),
-      move.to(1, 600, FAST_OUT_SLOW_IN, 90),
-      liftA.to(0, 380, FAST_OUT_SLOW_IN, 330),
-      (async () => {
-        await wait(470);
-        onOpened();
-        await panelA.to(1, 300, LINEAR_OUT_SLOW_IN);
-      })(),
-    ]);
+    await play(
+      [
+        { key: "lift", start: 0, dur: 160, to: 1, ease: FAST_OUT_SLOW_IN },
+        { key: "rot", start: 160, dur: 620, to: 180, ease: FLIP },
+        { key: "move", start: 250, dur: 600, to: 1, ease: FAST_OUT_SLOW_IN },
+        { key: "lift", start: 490, dur: 380, to: 0, ease: FAST_OUT_SLOW_IN },
+        { key: "panel", start: 630, dur: 300, to: 1, ease: LINEAR_OUT_SLOW_IN },
+      ],
+      930,
+      [{ at: 630, fn: onOpened }],
+    );
     drawFront();
   }
 
@@ -521,17 +580,16 @@ export function mountCardScreen(root, store) {
     if (!isOpen() || s.busy || s.flight) return;
     clearTimeout(nextStep);
     set({ stage: "closing", strokes: [], hint: null, browseSheet: null });
-    await Promise.all([
-      panelA.to(0, 180),
-      (async () => {
-        await wait(60);
-        await liftA.to(1, 160, FAST_OUT_SLOW_IN);
-        await wait(260);
-        await liftA.to(0, 360, FAST_OUT_SLOW_IN);
-      })(),
-      rotation.to(0, 600, FLIP, 120),
-      move.to(0, 580, FAST_OUT_SLOW_IN, 160),
-    ]);
+    await play(
+      [
+        { key: "panel", start: 0, dur: 180, to: 0, ease: FAST_OUT_SLOW_IN },
+        { key: "lift", start: 60, dur: 160, to: 1, ease: FAST_OUT_SLOW_IN },
+        { key: "rot", start: 120, dur: 600, to: 0, ease: FLIP },
+        { key: "move", start: 160, dur: 580, to: 0, ease: FAST_OUT_SLOW_IN },
+        { key: "lift", start: 480, dur: 360, to: 0, ease: FAST_OUT_SLOW_IN },
+      ],
+      840,
+    );
     if (s.stage !== "closing") return;
     panelMode = null;
     pad?.destroy();
@@ -621,15 +679,18 @@ export function mountCardScreen(root, store) {
     ctx.setTransform(d, 0, 0, d, 0, 0);
     ctx.clearRect(0, 0, side, side);
     drawStamp(ctx, flight.strokes, { x: pad2, y: pad2, w: from.w, h: from.h });
-    const place = (v) => {
-      const r = lerpRect(from, to, v);
+    const pathAt = (t) => {
+      const p = FAST_OUT_SLOW_IN(t);
+      const r = lerpRect(from, to, p);
       const k = r.w / from.w;
-      flightCanvas.style.transform = `translate3d(${r.x - pad2 * k}px, ${r.y - Math.sin(v * Math.PI) * 56 - pad2 * k}px, 0) scale(${k})`;
+      return { transform: `translate3d(${r.x - pad2 * k}px, ${r.y - Math.sin(p * Math.PI) * 56 - pad2 * k}px, 0) scale(${k})` };
     };
-    place(0);
+    flightCanvas.style.transform = pathAt(0).transform;
     flightCanvas.hidden = false;
-    await new Animated(0, place).to(1, 560, FAST_OUT_SLOW_IN);
+    const anim = bake(flightCanvas, 560, pathAt);
+    await finished(anim);
     flightCanvas.hidden = true;
+    anim?.cancel();
   }
 
   /**
@@ -655,14 +716,15 @@ export function mountCardScreen(root, store) {
     popCanvas.height = Math.round(box.h);
     popCanvas.getContext("2d").drawImage(backCanvas, box.x, box.y, box.w, box.h, 0, 0, popCanvas.width, popCanvas.height);
     place(popCanvas, box.x / w, box.y / h, box.w / w, box.h / h);
-    popCanvas.style.transform = "scale(1)";
     popCanvas.hidden = false;
     const token = (popToken += 1);
-    springPop((v) => {
-      if (token === popToken) popCanvas.style.transform = `scale(${v})`;
-    }).then(() => {
+    popAnim?.cancel();
+    popAnim = bake(popCanvas, 600, (t) => ({ transform: `scale(${springValue(t)})` }));
+    finished(popAnim).then(() => {
       if (token !== popToken) return;
       popCanvas.hidden = true;
+      popAnim?.cancel();
+      popAnim = null;
       s.pop = null;
     });
   }
@@ -749,7 +811,7 @@ export function mountCardScreen(root, store) {
   });
   slot.addEventListener("pointerdown", () => s.stage === "view" && ((liftEl.style.transition = "transform .11s"), (liftEl.style.transform = "scale(0.975)")));
   const release = () => {
-    liftEl.style.transform = `scale(${1 + 0.05 * liftA.value})`;
+    liftEl.style.transform = `scale(${1 + 0.05 * v.lift})`;
     setTimeout(() => (liftEl.style.transition = ""), 120);
   };
   slot.addEventListener("pointerup", release);
@@ -790,6 +852,8 @@ export function mountCardScreen(root, store) {
   return () => {
     destroyed = true;
     clearTimeout(nextStep);
+    stopTimeline();
+    popAnim?.cancel();
     unsubscribe();
     ro.disconnect();
     pad?.destroy();

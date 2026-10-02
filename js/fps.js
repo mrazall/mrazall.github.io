@@ -6,7 +6,7 @@
 
 import { pixelRatio } from "./marker.js";
 
-export const BUILD = "8";
+export const BUILD = "9";
 
 export function initFpsMeter() {
   const param = new URLSearchParams(location.search).get("fps");

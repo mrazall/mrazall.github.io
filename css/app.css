@@ -78,7 +78,7 @@ button:disabled { cursor: default; }
 /* Анимации карты «запечены»: холсты не перерисовываются, двигаются и мерцают готовые слои. */
 /* Блик на глянцевом логотипе: два окна (широкое и яркая сердцевина) едут по белой копии логотипа.
    Без CSS-масок — маска внутри 3D-поворота слишком дорога для мобильной графики. */
-.sheen { position: absolute; inset: 0; pointer-events: none; visibility: hidden; }
+.sheen { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
 .sheen .band { position: absolute; left: 0; top: 0; width: 32%; height: 100%; overflow: hidden; will-change: transform; }
 .sheen .band.core { width: 14%; }
 .sheen .band canvas { position: absolute; left: 0; top: 0; display: block; opacity: 0.13; will-change: transform; }

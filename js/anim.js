@@ -29,7 +29,7 @@ export const LINEAR_OUT_SLOW_IN = bezier(0, 0, 0.2, 1);
 export const FLIP = bezier(0.4, 0, 0.2, 1);
 export const LINEAR = (t) => t;
 
-const reduced = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+export const reduced = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /** Значение, которое плавно едет к цели; новая цель отменяет старую анимацию. */
 export class Animated {
@@ -70,23 +70,31 @@ export class Animated {
 
 export const wait = (ms) => new Promise((r) => setTimeout(r, reduced() ? 0 : ms));
 
-/** Пружинка: 1 → peak → затухающие колебания → 1 (ячейка, получившая отметку). */
-export function springPop(onValue, peak = 1.3, duration = 600) {
-  const start = performance.now();
-  return new Promise((resolve) => {
-    const frame = (now) => {
-      const t = (now - start) / duration;
-      if (t >= 1 || reduced()) {
-        onValue(1);
-        return resolve();
-      }
-      const rise = 0.25;
-      const v = t < rise ? 1 + (peak - 1) * FAST_OUT_SLOW_IN(t / rise) : 1 + (peak - 1) * Math.exp(-5 * (t - rise)) * Math.cos(11 * (t - rise));
-      onValue(v);
-      requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-  });
+/** Пружинка: 1 → peak → затухающие колебания → 1 (ячейка, получившая отметку). t — 0..1. */
+export function springValue(t, peak = 1.3) {
+  if (t >= 1) return 1;
+  const rise = 0.25;
+  return t < rise ? 1 + (peak - 1) * FAST_OUT_SLOW_IN(t / rise) : 1 + (peak - 1) * Math.exp(-5 * (t - rise)) * Math.cos(11 * (t - rise));
 }
+
+/**
+ * «Запечённая» анимация: траектория заранее рассчитывается в ключевые кадры (шаг ~16 мс) и отдаётся
+ * браузеру через Web Animations. Проигрывает её графический поток с частотой экрана (90–120 Гц),
+ * а не скрипт, у которого потолок 60 кадров в секунду и который может запнуться.
+ * Анимировать так можно только transform и opacity.
+ *
+ * styleAt(t) → { transform?, opacity? } для момента t (0..1). Возвращает Animation или null,
+ * если анимации отключены в системе.
+ */
+export function bake(el, duration, styleAt) {
+  if (reduced() || !el.animate) return null;
+  const n = Math.max(2, Math.ceil(duration / 16));
+  const frames = [];
+  for (let i = 0; i <= n; i++) frames.push({ offset: i / n, ...styleAt(i / n) });
+  return el.animate(frames, { duration, easing: "linear", fill: "forwards" });
+}
+
+/** Дождаться конца анимации; отменённая не считается ошибкой. */
+export const finished = (anim) => (anim ? anim.finished.then(() => true, () => false) : Promise.resolve(true));
 
 export const lerp = (a, b, t) => a + (b - a) * t;
