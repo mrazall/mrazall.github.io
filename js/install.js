@@ -1,13 +1,8 @@
-// Ненавязчивое предложение добавить карту на экран «Домой».
+// Добавление карты на домашний экран — пункт на экране «сохранить или перенести» (keep.js).
 //
 // Android (Chrome и родственные): браузер сам сообщает, что сайт можно установить (beforeinstallprompt), —
 // по нажатию показываем системный диалог. iPhone/iPad: такого события нет, можно только подсказать путь
-// через «Поделиться». Уже установленным и тем, кто отказался, не показываем.
-
-import { iosBrowserTab } from "./keep.js";
-
-const DISMISSED = "kom_install_dismissed";
-const SILENCE_DAYS = 60;
+// через «Поделиться». Если сайт уже открыт с домашнего экрана или браузер установку не умеет — пункта нет.
 
 let deferred = null; // событие beforeinstallprompt, пока им не воспользовались
 const listeners = new Set();
@@ -15,19 +10,14 @@ const notify = () => listeners.forEach((fn) => fn());
 
 const standalone = () => navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
 
-function dismissedRecently() {
-  try {
-    const at = Number(localStorage.getItem(DISMISSED));
-    return at > 0 && Date.now() - at < SILENCE_DAYS * 24 * 3600 * 1000;
-  } catch {
-    return false;
-  }
-}
+/** iPhone/iPad в браузере, не с домашнего экрана. */
+export const iosBrowserTab = () =>
+  (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) && !standalone();
 
 /** Вызывается один раз при запуске: событие установки приходит рано и только однажды. */
 export function initInstall() {
   window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault(); // свой, тихий вариант вместо баннера браузера
+    e.preventDefault(); // без баннера браузера: предложение живёт на экране «сохранить или перенести»
     deferred = e;
     notify();
   });
@@ -42,31 +32,19 @@ export function onInstallChange(fn) {
   return () => listeners.delete(fn);
 }
 
-/** "prompt" — можно показать системный диалог; "ios" — только подсказка; null — не предлагать. */
+/** "prompt" — можно показать системный диалог; "ios" — только инструкция; null — пункта нет. */
 export function installMode() {
-  if (standalone() || dismissedRecently()) return null;
+  if (standalone()) return null;
   if (deferred) return "prompt";
   return iosBrowserTab() ? "ios" : null;
 }
 
-/** Системный диалог установки (Android). Отказ запоминаем, чтобы не надоедать. */
+/** Системный диалог установки (Android). */
 export async function promptInstall() {
   const e = deferred;
   if (!e) return;
   deferred = null; // событие одноразовое
   e.prompt();
-  const choice = await e.userChoice.catch(() => null);
-  if (choice?.outcome !== "accepted") dismissInstall();
-  notify();
-}
-
-/** «Не предлагать» — на пару месяцев. */
-export function dismissInstall() {
-  try {
-    localStorage.setItem(DISMISSED, String(Date.now()));
-  } catch {
-    /* хранилище недоступно — просто спрячем до перезагрузки */
-  }
-  deferred = null;
+  await e.userChoice.catch(() => null);
   notify();
 }

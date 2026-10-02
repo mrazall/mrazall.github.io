@@ -103,12 +103,6 @@ canvas.pop { position: absolute; display: block; pointer-events: none; will-chan
 /* iPhone в Safari: карту надёжнее держать на экране «Домой» — иначе Safari может стереть данные сайта. */
 .keep-hint { left: 24px; right: 24px; bottom: max(4px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; text-align: center; }
 .keep-hint p { margin: 0; font-size: 14px; line-height: 1.3; color: rgba(247, 240, 232, 0.45); }
-/* Тихое предложение добавить карту на экран «Домой». */
-.install { display: flex; flex-direction: column; align-items: center; margin-bottom: 2px; }
-.install-row { display: flex; align-items: center; gap: 2px; }
-.install-go { color: var(--marker-faded); }
-.install-x { min-width: 40px; min-height: 40px; font-size: 22px; line-height: 1; color: rgba(247, 240, 232, 0.4); }
-.keep-hint .install-how { max-width: 320px; margin-bottom: 2px; color: var(--marker-faded); }
 
 /* ── «карта хранится в этом браузере»: сохранить / восстановить */
 .keep { background: var(--table); overflow-y: auto; }
@@ -116,7 +110,10 @@ canvas.pop { position: absolute; display: block; pointer-events: none; will-chan
 .keep h1 { font-weight: 400; font-size: 26px; line-height: 1.15; margin: 12px 0 12px; }
 .keep p { margin: 0 0 10px; color: var(--marker-faded); }
 .keep .keep-place { color: var(--marker); font-size: 16px; }
-.keep .ios { font-size: 17px; }
+/* «добавить на домашний экран»: кнопка (Android) или инструкция (iPhone) */
+.keep .install { display: flex; flex-direction: column; align-items: flex-start; margin-top: 14px; }
+.keep .install-title { color: var(--marker); margin: 8px 0 4px 6px; }
+.keep .install-how { font-size: 17px; margin: 0 0 0 6px; }
 .keep .actions { display: flex; flex-direction: column; align-items: flex-start; margin-top: 14px; }
 .keep .confirm { margin-top: 14px; }
 .keep .confirm .question { color: var(--marker); }

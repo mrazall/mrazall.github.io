@@ -1,16 +1,11 @@
 // «Карта хранится в этом браузере»: объяснение и сохранение / восстановление из файла — порт KeepCardScreen.kt.
 // Файл остаётся у гостя (облако, «Файлы», мессенджер себе); сервер в переносе не участвует.
 
+import { installMode, onInstallChange, promptInstall } from "./install.js";
 import { el } from "./screens.js";
 import { userMessage } from "./store.js";
 
 const DAY = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" });
-
-/** iPhone/iPad в Safari, не с экрана «Домой». */
-export const iosBrowserTab = () =>
-  (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) &&
-  !navigator.standalone &&
-  !matchMedia("(display-mode: standalone)").matches;
 
 export function mountKeepScreen(root, store, { onBack }) {
   const screen = el(`
@@ -21,7 +16,6 @@ export function mountKeepScreen(root, store, { onBack }) {
         <p class="keep-place">кофейня «Он мой» · просп. Мира, 45, Москва</p>
         <p>как бумажная: без аккаунта, и у кофейни копии нет. если очистить данные браузера или сменить телефон, карта пропадёт.</p>
         <p>сохраните её в файл — например, в облако или себе в мессенджер — и откройте этот файл на новом телефоне, в приложении или на этом сайте.</p>
-        <p class="ios" hidden>на iPhone добавьте сайт на экран «Домой» (поделиться → на экран «Домой»): так Safari не сотрёт карту. карта на экране «Домой» и карта во вкладке Safari хранятся отдельно — перенесите её файлом.</p>
         <div class="actions">
           <button class="link underline save">сохранить в файл</button>
           <button class="link underline open">восстановить из файла</button>
@@ -39,6 +33,11 @@ export function mountKeepScreen(root, store, { onBack }) {
           </div>
         </div>
         <p class="message" role="status"></p>
+        <div class="install" hidden>
+          <button class="link underline install-go" hidden>добавить на домашний экран</button>
+          <p class="install-title" hidden>добавить на домашний экран</p>
+          <p class="install-how" hidden></p>
+        </div>
         <button class="link small underline delete-card">удалить карту</button>
         <p class="keep-privacy"><a class="link small underline" href="privacy.html">политика конфиденциальности</a></p>
         <input type="file" accept=".json,application/json,text/plain" hidden>
@@ -54,7 +53,28 @@ export function mountKeepScreen(root, store, { onBack }) {
   const input = $("input");
   let pending = null;
 
-  $(".ios").hidden = !iosBrowserTab();
+  /**
+   * «Добавить на домашний экран»: на Android — кнопка с системным диалогом, на iPhone — инструкция
+   * (диалога там нет). Пока идёт подтверждение замены или удаления карты, пункт спрятан.
+   */
+  const installBox = $(".install");
+  function updateInstall() {
+    const mode = installMode();
+    installBox.hidden = !mode || actions.hidden;
+    $(".install-go").hidden = mode !== "prompt";
+    $(".install-title").hidden = $(".install-how").hidden = mode !== "ios";
+    if (mode !== "ios") return;
+    const c = store.card;
+    const started = !!c && (c.total > 0 || c.giftDrawings.size > 0);
+    // На iPhone карта на домашнем экране хранится отдельно от вкладки браузера.
+    $(".install-how").textContent =
+      "на iPhone: нажмите «Поделиться» в браузере, затем «На экран „Домой“». так Safari не сотрёт карту." +
+      (started ? " карта на домашнем экране хранится отдельно: сначала сохраните её в файл, а после добавления восстановите из файла." : "");
+  }
+  $(".install-go").onclick = promptInstall;
+  const stopInstall = onInstallChange(updateInstall);
+  const stopStore = store.subscribe(updateInstall);
+  updateInstall();
   $(".back").onclick = onBack;
   const onKey = (e) => {
     if (e.key !== "Escape") return;
@@ -69,6 +89,7 @@ export function mountKeepScreen(root, store, { onBack }) {
     actions.hidden = !!value || !deleteConfirm.hidden;
     confirm.hidden = !value;
     deleteCard.hidden = !!value;
+    updateInstall();
     if (value) $(".question").textContent = `заменить карту картой из файла${value.at ? ` от ${DAY.format(value.at).replace(/\s*г\.$/, "")}` : ""}?`;
   };
 
@@ -77,6 +98,7 @@ export function mountKeepScreen(root, store, { onBack }) {
     actions.hidden = !!pending;
     deleteCard.hidden = false;
     show(null);
+    updateInstall();
   }
 
   deleteCard.onclick = () => {
@@ -84,6 +106,7 @@ export function mountKeepScreen(root, store, { onBack }) {
     deleteCard.hidden = true;
     actions.hidden = true;
     deleteConfirm.hidden = false;
+    updateInstall();
   };
   $(".delete-no").onclick = cancelDelete;
   $(".delete-yes").onclick = () => {
@@ -96,6 +119,7 @@ export function mountKeepScreen(root, store, { onBack }) {
     deleteConfirm.hidden = true;
     actions.hidden = false;
     deleteCard.hidden = false;
+    updateInstall();
   };
 
   $(".save").onclick = async () => {
@@ -161,5 +185,9 @@ export function mountKeepScreen(root, store, { onBack }) {
     show(null);
   };
 
-  return () => document.removeEventListener("keydown", onKey);
+  return () => {
+    document.removeEventListener("keydown", onKey);
+    stopInstall();
+    stopStore();
+  };
 }
