@@ -120,6 +120,20 @@ export class Store {
     return this.publish();
   }
 
+  /** Удалить все отметки и рисунки в этой карте, сохранив пустую карту и обходя demo seed. */
+  deleteCard() {
+    const before = this.data;
+    this.data = upgraded({ total: 0, marks: {}, gifts: {} });
+    try {
+      this.save();
+    } catch (e) {
+      this.data = before;
+      throw e;
+    }
+    this.decoded.clear();
+    return this.publish();
+  }
+
   publish() {
     const d = this.data;
     this.card = makeCard(d.total, this.decodeAll(d.marks), this.decodeAll(d.gifts));

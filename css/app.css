@@ -101,6 +101,10 @@ button:disabled { cursor: default; }
 .keep .fine { font-size: 17px; }
 .keep .row { justify-content: flex-start; gap: 32px; }
 .keep .message { margin-top: 8px; color: var(--marker); font-size: 17px; min-height: 1.3em; }
+.keep .delete-card, .keep .delete-confirm { color: var(--red); }
+.keep .delete-card { margin-top: 12px; }
+.keep .delete-question { color: var(--red); font-size: 19px; }
+.keep .delete-actions { display: flex; flex-direction: column; align-items: flex-start; }
 .keep .keep-privacy { margin-top: 18px; }
 
 .panel { left: 0; top: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; }

@@ -31,7 +31,15 @@ export function mountKeepScreen(root, store, { onBack }) {
           <p class="fine">отметки, которые сейчас в этом браузере, заменятся.</p>
           <div class="row"><button class="link underline yes">заменить</button><button class="link underline no">отмена</button></div>
         </div>
+        <div class="delete-confirm" hidden>
+          <p class="delete-question">вы уверены? удалить все отметки?</p>
+          <div class="delete-actions">
+            <button class="link underline delete-yes">да, удалить все отметки</button>
+            <button class="link underline delete-no">нет, я сюда случайно нажал</button>
+          </div>
+        </div>
         <p class="message" role="status"></p>
+        <button class="link small underline delete-card">удалить карту</button>
         <p class="keep-privacy"><a class="link small underline" href="privacy.html">политика конфиденциальности</a></p>
         <input type="file" accept=".json,application/json,text/plain" hidden>
       </div>
@@ -41,20 +49,53 @@ export function mountKeepScreen(root, store, { onBack }) {
   const message = $(".message");
   const actions = $(".actions");
   const confirm = $(".confirm");
+  const deleteCard = $(".delete-card");
+  const deleteConfirm = $(".delete-confirm");
   const input = $("input");
   let pending = null;
 
   $(".ios").hidden = !iosBrowserTab();
   $(".back").onclick = onBack;
-  const onKey = (e) => e.key === "Escape" && onBack();
+  const onKey = (e) => {
+    if (e.key !== "Escape") return;
+    if (!deleteConfirm.hidden) cancelDelete();
+    else onBack();
+  };
   document.addEventListener("keydown", onKey);
 
   const show = (text) => (message.textContent = text ?? "");
   const askToReplace = (value) => {
     pending = value;
-    actions.hidden = !!value;
+    actions.hidden = !!value || !deleteConfirm.hidden;
     confirm.hidden = !value;
+    deleteCard.hidden = !!value;
     if (value) $(".question").textContent = `заменить карту картой из файла${value.at ? ` от ${DAY.format(value.at).replace(/\s*г\.$/, "")}` : ""}?`;
+  };
+
+  function cancelDelete() {
+    deleteConfirm.hidden = true;
+    actions.hidden = !!pending;
+    deleteCard.hidden = false;
+    show(null);
+  }
+
+  deleteCard.onclick = () => {
+    show(null);
+    deleteCard.hidden = true;
+    actions.hidden = true;
+    deleteConfirm.hidden = false;
+  };
+  $(".delete-no").onclick = cancelDelete;
+  $(".delete-yes").onclick = () => {
+    try {
+      store.deleteCard();
+      show("карта удалена");
+    } catch (e) {
+      show(userMessage(e));
+    }
+    deleteConfirm.hidden = true;
+    actions.hidden = false;
+    deleteCard.hidden = false;
   };
 
   $(".save").onclick = async () => {
