@@ -1,7 +1,7 @@
 // Холст бариста — увеличенная ячейка карты. Настоящий touch-canvas: линия под пальцем,
 // промежуточные точки (getCoalescedEvents), координаты в долях стороны — как DrawingPad.kt.
 
-import { COLORS, MARKER_WIDTH, drawMarkerStroke, drawStamp, paperPattern } from "./marker.js";
+import { COLORS, MARKER_WIDTH, drawMarkerStroke, drawStamp, paperPattern, pixelRatio } from "./marker.js";
 
 const BORDER = 0.045;
 const MARGIN = 0.05;
@@ -58,7 +58,7 @@ export class DrawingPad {
   }
 
   resize() {
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = pixelRatio();
     const size = Math.round(this.canvas.clientWidth * dpr);
     if (size && (this.canvas.width !== size || this.canvas.height !== size)) {
       this.canvas.width = this.canvas.height = size;

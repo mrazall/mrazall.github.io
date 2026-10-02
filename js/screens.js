@@ -1,7 +1,7 @@
 // Общие помощники экранов: разметка, склонения, знак подарочного кофе.
 
 import { ringImage } from "./card.js";
-import { COLORS, drawMarkerStroke, handCircle } from "./marker.js";
+import { COLORS, drawMarkerStroke, handCircle, pixelRatio } from "./marker.js";
 
 export function el(html) {
   const t = document.createElement("template");
@@ -21,7 +21,7 @@ export const stampsWord = (n) => plural(n, "отметка", "отметки", "
 /** Кольцо с карты фирменным красным, обведённое белым маркером, — знак подарочного кофе. */
 export function markerRing(canvas, seed = 2) {
   const css = canvas.clientWidth || parseInt(getComputedStyle(canvas).width) || 34;
-  const d = window.devicePixelRatio || 1;
+  const d = pixelRatio();
   canvas.width = canvas.height = Math.round(css * d);
   const ctx = canvas.getContext("2d");
   const size = canvas.width;

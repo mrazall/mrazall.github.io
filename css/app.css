@@ -76,17 +76,12 @@ button:disabled { cursor: default; }
 .shade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
 
 /* Анимации карты «запечены»: холсты не перерисовываются, двигаются и мерцают готовые слои. */
-/* Блик на глянцевом логотипе: полоса света, обрезанная по форме краски. */
-.sheen {
-  position: absolute; inset: 0; pointer-events: none; visibility: hidden; overflow: hidden;
-  -webkit-mask: url("../assets/card_front_ink.png") center / 100% 100% no-repeat;
-  mask: url("../assets/card_front_ink.png") center / 100% 100% no-repeat;
-}
-.sheen i {
-  position: absolute; left: 0; top: -20%; width: 32%; height: 140%;
-  background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0));
-  will-change: transform;
-}
+/* Блик на глянцевом логотипе: два окна (широкое и яркая сердцевина) едут по белой копии логотипа.
+   Без CSS-масок — маска внутри 3D-поворота слишком дорога для мобильной графики. */
+.sheen { position: absolute; inset: 0; pointer-events: none; visibility: hidden; }
+.sheen .band { position: absolute; left: 0; top: 0; width: 32%; height: 100%; overflow: hidden; will-change: transform; }
+.sheen .band.core { width: 14%; }
+.sheen .band canvas { position: absolute; left: 0; top: 0; display: block; opacity: 0.13; will-change: transform; }
 /* Мерцание ячейки под отметку и кольца под подарок. */
 .glow { position: absolute; background: var(--marker); pointer-events: none; opacity: 0.2; animation: glow 0.9s ease-in-out infinite alternate; will-change: opacity; }
 .ring-glow { border-radius: 50%; }

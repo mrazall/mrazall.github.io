@@ -21,6 +21,7 @@ export function loadArt() {
 }
 
 export const ringImage = () => art.card_ring;
+export const inkImage = () => art.card_front_ink;
 
 /** Рисунок отметки; если его почему-то нет — рукописная буква-заглушка. */
 const markFor = (card, n) => card.drawings.get(n) ?? fallbackMark(n);

@@ -3,9 +3,9 @@
 // После отметки холст сразу готов к следующей: несколько отметок подряд — без повторного переворота.
 
 import { Animated, FAST_OUT_SLOW_IN, FLIP, LINEAR_OUT_SLOW_IN, lerp, springPop, wait } from "./anim.js";
-import { renderBack, renderFront, ringImage } from "./card.js";
+import { inkImage, renderBack, renderFront, ringImage } from "./card.js";
 import { ASPECT, ROWS, cellInk, cellOf, cellRect, cellStroke, ringCenter, ringInk, ringRadius, sheetOf, sheetOfGift } from "./geometry.js";
-import { COLORS, drawStamp } from "./marker.js";
+import { COLORS, drawStamp, pixelRatio } from "./marker.js";
 import { iosBrowserTab } from "./keep.js";
 import { DrawingPad, verifyDrawing } from "./pad.js";
 import { el, markerRing, stampsWord } from "./screens.js";
@@ -63,7 +63,7 @@ export function mountCardScreen(root, store) {
         </div>
         <div class="card-slot" role="button" tabindex="0" aria-label="карта лояльности">
           <div class="lift"><div class="flip">
-            <div class="face front"><canvas></canvas><div class="sheen"><i></i></div><div class="shade"></div></div>
+            <div class="face front"><canvas></canvas><div class="sheen"><div class="band"><canvas></canvas></div><div class="band core"><canvas></canvas></div></div><div class="shade"></div></div>
             <div class="face back"><canvas></canvas><div class="glow cell-glow" hidden></div><div class="glow ring-glow" hidden></div><canvas class="pop" hidden></canvas><div class="shade"></div></div>
           </div></div>
         </div>
@@ -81,7 +81,7 @@ export function mountCardScreen(root, store) {
   const backCanvas = $(".back canvas");
   const shades = screen.querySelectorAll(".shade");
   const sheenEl = $(".sheen");
-  const sheenBar = $(".sheen i");
+  const sheenBands = [...screen.querySelectorAll(".sheen .band")];
   const cellGlow = $(".cell-glow");
   const ringGlow = $(".ring-glow");
   const popCanvas = $("canvas.pop");
@@ -154,7 +154,7 @@ export function mountCardScreen(root, store) {
     // Размер поверхности постоянен: движение и уменьшение — только transform.
     slot.style.width = `${L.view.w}px`;
     slot.style.height = `${L.view.h}px`;
-    dpr = window.devicePixelRatio || 1;
+    dpr = pixelRatio();
     const maxW = Math.max(L.view.w, L.open.w) * dpr;
     for (const c of [frontCanvas, backCanvas]) {
       c.width = Math.round(maxW);
@@ -164,6 +164,7 @@ export function mountCardScreen(root, store) {
     Object.assign(panelEl.style, { left: `${L.panel.x}px`, top: `${L.panel.y}px`, width: `${L.panel.w}px`, height: `${L.panel.h}px` });
     drawFront(true);
     drawBack(true);
+    bakeSheen();
     frame();
     if (panelMode) renderPanel(true);
   }
@@ -178,10 +179,21 @@ export function mountCardScreen(root, store) {
     flipEl.style.transform = `rotateY(${r}deg)`;
     const shade = (1 - Math.abs(Math.cos((r * Math.PI) / 180))) * 0.35;
     shades.forEach((x) => (x.style.opacity = shade));
-    // Блик на глянцевом логотипе — готовый слой, двигается только transform.
+    // Блик на глянцевом логотипе: два «окна» едут по карте, внутри каждого — неподвижная белая копия
+    // логотипа (окно сдвигается вправо, копия на столько же влево). Только transform, без масок.
     const sheenOn = r > 1 && r < 90;
-    sheenEl.style.visibility = sheenOn ? "visible" : "hidden";
-    if (sheenOn) sheenBar.style.transform = `translateX(${((-0.5 + (r / 90) * 1.8) / 0.32) * 100}%)`;
+    if (sheenOn !== sheenShown) {
+      sheenShown = sheenOn;
+      sheenEl.style.visibility = sheenOn ? "visible" : "hidden";
+    }
+    if (sheenOn) {
+      const x = (-0.5 + (r / 90) * 1.8) * L.view.w;
+      sheenBands.forEach((band, i) => {
+        const bx = x + (i ? 0.09 * L.view.w : 0); // яркая сердцевина — по центру широкой полосы
+        band.style.transform = `translate3d(${bx}px, 0, 0)`;
+        band.firstChild.style.transform = `translate3d(${-bx}px, 0, 0)`;
+      });
+    }
 
     const m = move.value;
     chrome.style.opacity = keepHint.style.opacity = Math.max(0, Math.min(1, 1 - m * 2.2));
@@ -191,6 +203,25 @@ export function mountCardScreen(root, store) {
     panelEl.style.opacity = panelA.value;
     panelEl.style.transform = `translateY(${(1 - panelA.value) * 28}px)`;
     panelEl.classList.toggle("visible", panelA.value > 0.5);
+  }
+
+  /** Белая копия логотипа для блика — рисуется один раз на размер карты. */
+  let sheenShown = false;
+  function bakeSheen() {
+    const img = inkImage();
+    for (const band of sheenBands) {
+      const c = band.firstChild;
+      c.width = Math.round(L.view.w);
+      c.height = Math.round(L.view.h);
+      c.style.width = `${L.view.w}px`;
+      c.style.height = `${L.view.h}px`;
+      const x = c.getContext("2d");
+      x.globalCompositeOperation = "source-over";
+      x.drawImage(img, 0, 0, c.width, c.height);
+      x.globalCompositeOperation = "source-in";
+      x.fillStyle = "#fff";
+      x.fillRect(0, 0, c.width, c.height);
+    }
   }
 
   // Холсты карты рисуются только когда меняется сама карта или лист — не в анимации.
@@ -581,7 +612,7 @@ export function mountCardScreen(root, store) {
     const to = { x: cb.left + ink.x, y: cb.top + ink.y, w: ink.w, h: ink.h };
 
     // Рисунок рисуется один раз в маленький холст; дальше двигается и уменьшается только transform.
-    const d = window.devicePixelRatio || 1;
+    const d = pixelRatio();
     const pad2 = from.w * 0.12; // запас: маркер заходит за край квадрата
     const side = from.w + 2 * pad2;
     flightCanvas.width = flightCanvas.height = Math.round(side * d);
