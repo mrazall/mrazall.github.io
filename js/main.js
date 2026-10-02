@@ -6,15 +6,7 @@ import { mountCardScreen } from "./cardScreen.js";
 import { mountKeepScreen } from "./keep.js";
 import { Store } from "./store.js";
 
-const cfg = window.KOM_CONFIG ?? {};
-// Демо: demo: true в config.js или ?demo — отдельная карта с 4 стартовыми отметками, настоящую не трогает.
-// Режим запоминается (чтобы с экрана «Домой» открывалось демо); ?demo=off — вернуться к настоящей карте.
-const param = new URLSearchParams(location.search).get("demo");
-if (param === "off") localStorage.removeItem("kom_mode");
-else if (param !== null) localStorage.setItem("kom_mode", "demo");
-const demo = cfg.demo === true || localStorage.getItem("kom_mode") === "demo";
-
-const store = demo ? new Store({ key: "kom_demo_card", seed: 4 }) : new Store();
+const store = new Store();
 
 const app = document.getElementById("app");
 let unmount = () => {};

@@ -1,10 +1,9 @@
 // Офлайн-оболочка: сайт открывается с экрана «Домой» мгновенно и без сети.
 // Сервера нет — карта в localStorage, так что без сети работает всё.
-const VERSION = "kom-v6";
+const VERSION = "kom-v7";
 const SHELL = [
   "./",
   "index.html",
-  "config.js",
   "manifest.webmanifest",
   "css/app.css",
   "js/main.js",

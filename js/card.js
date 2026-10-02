@@ -1,6 +1,6 @@
 // Стороны карты на <canvas> — порт CardFaces.kt: слои с фотографии карты, сетка 5×6, кольца.
 
-import { COLUMNS, CELLS, ROWS, STRIP_LEFT, cellInk, cellRect, cellStroke, giftNumberFor, ringCenter, ringInk, ringRadius } from "./geometry.js";
+import { COLUMNS, CELLS, ROWS, STRIP_LEFT, cellInk, cellRect, cellStroke, giftNumberFor, ringInk } from "./geometry.js";
 import { COLORS, drawStamp, fallbackMark, paperPattern } from "./marker.js";
 
 const art = {};
@@ -32,41 +32,17 @@ function base(ctx, w, h) {
   ctx.fillRect(0, 0, w, h);
 }
 
-// Слой краски с бликом — в отдельном canvas, чтобы блик ложился только на глянцевый логотип.
-let inkLayer = null;
-
 /**
- * Лицевая сторона. sheen 0..1 — блик во время переворота (null — без блика).
+ * Лицевая сторона. Рисуется только при изменении карты; блик на логотипе во время переворота —
+ * отдельный CSS-слой (.sheen), холст ради него не перерисовывается.
  * В пустом правом нижнем углу — текущий ряд: 6 квадратиков и кольцо, тем же языком, что оборот.
  */
-export function renderFront(canvas, card, sheen = null) {
+export function renderFront(canvas, card) {
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
   const h = canvas.height;
   base(ctx, w, h);
-
-  if (sheen == null) {
-    ctx.drawImage(art.card_front_ink, 0, 0, w, h);
-  } else {
-    if (!inkLayer || inkLayer.width !== w || inkLayer.height !== h) {
-      inkLayer = document.createElement("canvas");
-      inkLayer.width = w;
-      inkLayer.height = h;
-    }
-    const l = inkLayer.getContext("2d");
-    l.globalCompositeOperation = "source-over";
-    l.clearRect(0, 0, w, h);
-    l.drawImage(art.card_front_ink, 0, 0, w, h);
-    const x = -0.5 * w + sheen * 1.8 * w;
-    const g = l.createLinearGradient(x, 0, x + w * 0.32, h);
-    g.addColorStop(0, "rgba(255,255,255,0)");
-    g.addColorStop(0.5, "rgba(255,255,255,0.26)");
-    g.addColorStop(1, "rgba(255,255,255,0)");
-    l.globalCompositeOperation = "source-atop";
-    l.fillStyle = g;
-    l.fillRect(0, 0, w, h);
-    ctx.drawImage(inkLayer, 0, 0);
-  }
+  ctx.drawImage(art.card_front_ink, 0, 0, w, h);
   ctx.drawImage(art.card_front_white, 0, 0, w, h);
   if (card) drawFrontCounter(ctx, w, h, card);
 }
@@ -110,58 +86,14 @@ function drawFrontCounter(ctx, w, h, card) {
 }
 
 /**
- * Оборот. opts: sheet, highlightCell, pulse (0..1), pop {cell, scale, ring}, giftFocus {number, mode: pulse|steady}.
- * Выданный подарок — рисунок бариста на кольце ряда.
+ * Оборот листа `sheet`: сетка, отметки, рисунки бариста на кольцах. Рисуется только при изменении карты
+ * или листа. Всё, что движется (мерцание ячейки и кольца, «пружинка»), — отдельные слои поверх холста,
+ * см. cardScreen.js: холст ради анимации не перерисовывается.
  */
-const backLayers = new WeakMap();
-
-export function renderBack(canvas, card, opts = {}) {
-  // Сетка, бумага и старые отметки не меняются при пульсации.
-  // Пружинящий элемент требует отдельного полного кадра.
-  if (opts.pop) return renderBackFull(canvas, card, opts);
-  const sheet = opts.sheet ?? 0;
-  let cached = backLayers.get(canvas);
-  if (!cached || cached.card !== card || cached.sheet !== sheet ||
-      cached.layer.width !== canvas.width || cached.layer.height !== canvas.height) {
-    const layer = document.createElement("canvas");
-    layer.width = canvas.width;
-    layer.height = canvas.height;
-    renderBackFull(layer, card, { sheet });
-    cached = { card, sheet, layer };
-    backLayers.set(canvas, cached);
-  }
+export function renderBack(canvas, card, { sheet = 0 } = {}) {
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
   const h = canvas.height;
-  ctx.drawImage(cached.layer, 0, 0);
-  const pulse = opts.pulse ?? 0;
-  if (opts.highlightCell != null) {
-    const r = cellRect(w, h, opts.highlightCell);
-    const stroke = cellStroke(w);
-    ctx.fillStyle = `rgba(247,240,232,${0.1 + 0.2 * pulse})`;
-    ctx.fillRect(r.x + stroke, r.y + stroke, r.w - 2 * stroke, r.h - 2 * stroke);
-    const number = sheet * CELLS + opts.highlightCell + 1;
-    if (card && number <= card.total) drawStamp(ctx, markFor(card, number), cellInk(w, h, opts.highlightCell));
-  }
-  if (!card || !opts.giftFocus) return;
-  for (let row = 0; row < ROWS; row++) {
-    const number = giftNumberFor(sheet, row);
-    if (opts.giftFocus.number !== number || card.giftState(number) === "used") continue;
-    const c = ringCenter(w, h, row);
-    ctx.fillStyle = `rgba(247,240,232,${opts.giftFocus.mode === "pulse" ? 0.1 + 0.2 * pulse : 0.2})`;
-    ctx.beginPath();
-    ctx.arc(c.x, c.y, ringRadius(w) * 0.82, 0, 2 * Math.PI);
-    ctx.fill();
-    const mark = card.giftDrawings.get(number);
-    if (mark) drawStamp(ctx, mark, ringInk(w, h, row));
-  }
-}
-
-function renderBackFull(canvas, card, opts = {}) {
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width;
-  const h = canvas.height;
-  const { sheet = 0, highlightCell = null, pulse = 0, pop = null, giftFocus = null } = opts;
   base(ctx, w, h);
 
   const stripLeft = Math.round(STRIP_LEFT * w);
@@ -169,53 +101,19 @@ function renderBackFull(canvas, card, opts = {}) {
 
   const total = card?.total ?? 0;
   const stroke = cellStroke(w);
+  ctx.strokeStyle = COLORS.ink;
+  ctx.lineWidth = stroke;
   for (let cell = 0; cell < CELLS; cell++) {
     const r = cellRect(w, h, cell);
     const number = sheet * CELLS + cell + 1;
-    const scale = pop && !pop.ring && pop.cell === cell ? pop.scale : 1;
-    ctx.save();
-    if (scale !== 1) {
-      const cx = r.x + r.w / 2;
-      const cy = r.y + r.h / 2;
-      ctx.translate(cx, cy);
-      ctx.scale(scale, scale);
-      ctx.translate(-cx, -cy);
-    }
-    if (cell === highlightCell) {
-      ctx.fillStyle = `rgba(247,240,232,${0.1 + 0.2 * pulse})`;
-      ctx.fillRect(r.x + stroke, r.y + stroke, r.w - 2 * stroke, r.h - 2 * stroke);
-    }
-    ctx.strokeStyle = COLORS.ink;
-    ctx.lineWidth = stroke;
     ctx.strokeRect(r.x + stroke / 2, r.y + stroke / 2, r.w - stroke, r.h - stroke);
     if (card && number <= total) drawStamp(ctx, markFor(card, number), cellInk(w, h, cell));
-    ctx.restore();
   }
 
   if (!card) return;
-  const radius = ringRadius(w);
   for (let row = 0; row < ROWS; row++) {
-    const number = giftNumberFor(sheet, row);
-    const state = card.giftState(number);
-    const c = ringCenter(w, h, row);
-    const pulsing = giftFocus?.number === number && giftFocus.mode === "pulse";
-    const scale = pop && pop.ring && pop.cell === row ? pop.scale : 1;
-    ctx.save();
-    if (scale !== 1) {
-      ctx.translate(c.x, c.y);
-      ctx.scale(scale, scale);
-      ctx.translate(-c.x, -c.y);
-    }
-    // Кольца не обводятся. Кольцо, на котором сейчас рисует бариста (заработанный подарок
-    // или авансом), мерцает изнутри — как ячейка под отметку.
-    if (giftFocus?.number === number && state !== "used") {
-      ctx.fillStyle = `rgba(247,240,232,${pulsing ? 0.1 + 0.2 * pulse : 0.2})`;
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, radius * 0.82, 0, 2 * Math.PI);
-      ctx.fill();
-    }
-    const mark = card.giftDrawings.get(number);
+    // Кольца не обводятся; выданный подарок — рисунок бариста на кольце.
+    const mark = card.giftDrawings.get(giftNumberFor(sheet, row));
     if (mark) drawStamp(ctx, mark, ringInk(w, h, row));
-    ctx.restore();
   }
 }

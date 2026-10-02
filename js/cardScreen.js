@@ -4,7 +4,7 @@
 
 import { Animated, FAST_OUT_SLOW_IN, FLIP, LINEAR_OUT_SLOW_IN, lerp, springPop, wait } from "./anim.js";
 import { renderBack, renderFront, ringImage } from "./card.js";
-import { ASPECT, ROWS, cellInk, cellOf, ringInk, sheetOf, sheetOfGift } from "./geometry.js";
+import { ASPECT, ROWS, cellInk, cellOf, cellRect, cellStroke, ringCenter, ringInk, ringRadius, sheetOf, sheetOfGift } from "./geometry.js";
 import { COLORS, drawStamp } from "./marker.js";
 import { iosBrowserTab } from "./keep.js";
 import { DrawingPad, verifyDrawing } from "./pad.js";
@@ -63,8 +63,8 @@ export function mountCardScreen(root, store) {
         </div>
         <div class="card-slot" role="button" tabindex="0" aria-label="карта лояльности">
           <div class="lift"><div class="flip">
-            <div class="face front"><canvas></canvas><div class="shade"></div></div>
-            <div class="face back"><canvas></canvas><div class="shade"></div></div>
+            <div class="face front"><canvas></canvas><div class="sheen"><i></i></div><div class="shade"></div></div>
+            <div class="face back"><canvas></canvas><div class="glow cell-glow" hidden></div><div class="glow ring-glow" hidden></div><canvas class="pop" hidden></canvas><div class="shade"></div></div>
           </div></div>
         </div>
         <div class="panel"></div>
@@ -80,6 +80,11 @@ export function mountCardScreen(root, store) {
   const frontCanvas = $(".front canvas");
   const backCanvas = $(".back canvas");
   const shades = screen.querySelectorAll(".shade");
+  const sheenEl = $(".sheen");
+  const sheenBar = $(".sheen i");
+  const cellGlow = $(".cell-glow");
+  const ringGlow = $(".ring-glow");
+  const popCanvas = $("canvas.pop");
   const chrome = $(".chrome");
   const hint = $(".hint");
   const badge = $(".gift-badge");
@@ -136,9 +141,8 @@ export function mountCardScreen(root, store) {
   const liftA = new Animated(0, frame);
   const move = new Animated(0, frame);
   const panelA = new Animated(0, frame);
-  let popScale = 1;
-  let pulse = 0;
 
+  let popToken = 0;
   let L = null;
   let dpr = 1;
 
@@ -158,8 +162,8 @@ export function mountCardScreen(root, store) {
     }
     chrome.style.top = `${L.view.y + L.view.h + 20}px`;
     Object.assign(panelEl.style, { left: `${L.panel.x}px`, top: `${L.panel.y}px`, width: `${L.panel.w}px`, height: `${L.panel.h}px` });
-    drawFront();
-    drawBack();
+    drawFront(true);
+    drawBack(true);
     frame();
     if (panelMode) renderPanel(true);
   }
@@ -174,7 +178,10 @@ export function mountCardScreen(root, store) {
     flipEl.style.transform = `rotateY(${r}deg)`;
     const shade = (1 - Math.abs(Math.cos((r * Math.PI) / 180))) * 0.35;
     shades.forEach((x) => (x.style.opacity = shade));
-    if (r > 1 && r < 90) drawFront(r / 90);
+    // Блик на глянцевом логотипе — готовый слой, двигается только transform.
+    const sheenOn = r > 1 && r < 90;
+    sheenEl.style.visibility = sheenOn ? "visible" : "hidden";
+    if (sheenOn) sheenBar.style.transform = `translateX(${((-0.5 + (r / 90) * 1.8) / 0.32) * 100}%)`;
 
     const m = move.value;
     chrome.style.opacity = keepHint.style.opacity = Math.max(0, Math.min(1, 1 - m * 2.2));
@@ -186,32 +193,60 @@ export function mountCardScreen(root, store) {
     panelEl.classList.toggle("visible", panelA.value > 0.5);
   }
 
-  function drawFront(sheen = null) {
-    if (frontCanvas.width) renderFront(frontCanvas, card(), sheen);
+  // Холсты карты рисуются только когда меняется сама карта или лист — не в анимации.
+  let drawnFront = null;
+  let drawnBack = null;
+
+  function drawFront(force = false) {
+    if (!frontCanvas.width) return;
+    const c = card();
+    if (!force && drawnFront === c) return;
+    drawnFront = c;
+    renderFront(frontCanvas, c);
   }
 
-  function drawBack() {
+  function drawBack(force = false) {
     if (!backCanvas.width) return;
-    renderBack(backCanvas, card(), {
-      sheet: sheet(),
-      highlightCell: targetCell(),
-      pulse,
-      pop: s.pop ? { ...s.pop, scale: popScale } : null,
-      giftFocus: giftFocus(),
-    });
+    const c = card();
+    const sh = sheet();
+    if (force || !drawnBack || drawnBack.card !== c || drawnBack.sheet !== sh) {
+      drawnBack = { card: c, sheet: sh };
+      renderBack(backCanvas, c, { sheet: sh });
+    }
+    updateGlow();
   }
 
-  // Мерцание ячейки и кольца — пока карта открыта.
-  const pulseLoop = (now) => {
-    if (destroyed) return;
-    if (!document.hidden && rotation.value === 180 && move.value === 1 &&
-        (targetCell() !== null || giftFocus()?.mode === "pulse")) {
-      pulse = 0.5 - 0.5 * Math.cos((now / 900) * Math.PI);
-      drawBack();
+  /** Процентный прямоугольник внутри стороны карты (геометрия задана в долях ширины и высоты). */
+  function place(node, x, y, w, h) {
+    Object.assign(node.style, { left: `${x * 100}%`, top: `${y * 100}%`, width: `${w * 100}%`, height: `${h * 100}%` });
+  }
+
+  /**
+   * Мерцание ячейки под отметку и кольца под подарок — два готовых слоя с CSS-анимацией прозрачности.
+   * Раньше ради них весь оборот перерисовывался 60 раз в секунду, пока бариста рисует.
+   */
+  function updateGlow() {
+    const cell = targetCell();
+    cellGlow.hidden = cell === null;
+    if (cell !== null) {
+      const r = cellRect(1, 1, cell);
+      const sx = cellStroke(1);
+      const sy = sx * ASPECT; // толщина контура в долях высоты
+      place(cellGlow, r.x + sx, r.y + sy, r.w - 2 * sx, r.h - 2 * sy);
     }
-    requestAnimationFrame(pulseLoop);
-  };
-  requestAnimationFrame(pulseLoop);
+
+    const focus = giftFocus();
+    const c = card();
+    const onSheet = focus && c && sheetOfGift(focus.number) === sheet() && c.giftState(focus.number) !== "used";
+    ringGlow.hidden = !onSheet;
+    if (onSheet) {
+      const center = ringCenter(1, 1, (focus.number - 1) % ROWS);
+      const rx = ringRadius(1) * 0.82;
+      const ry = rx * ASPECT;
+      place(ringGlow, center.x - rx, center.y - ry, 2 * rx, 2 * ry);
+      ringGlow.classList.toggle("steady", focus.mode !== "pulse");
+    }
+  }
 
   // ── общий рендер «интерфейса вокруг» (не анимационный)
   function render() {
@@ -545,31 +580,59 @@ export function mountCardScreen(root, store) {
     const ink = flight.ring ? ringInk(cb.width, cb.height, (flight.ring - 1) % ROWS) : cellInk(cb.width, cb.height, cellOf(flight.index));
     const to = { x: cb.left + ink.x, y: cb.top + ink.y, w: ink.w, h: ink.h };
 
+    // Рисунок рисуется один раз в маленький холст; дальше двигается и уменьшается только transform.
     const d = window.devicePixelRatio || 1;
-    flightCanvas.width = innerWidth * d;
-    flightCanvas.height = innerHeight * d;
+    const pad2 = from.w * 0.12; // запас: маркер заходит за край квадрата
+    const side = from.w + 2 * pad2;
+    flightCanvas.width = flightCanvas.height = Math.round(side * d);
+    flightCanvas.style.width = flightCanvas.style.height = `${side}px`;
     const ctx = flightCanvas.getContext("2d");
-    const t = new Animated(0, (v) => {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, flightCanvas.width, flightCanvas.height);
-      ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.clearRect(0, 0, side, side);
+    drawStamp(ctx, flight.strokes, { x: pad2, y: pad2, w: from.w, h: from.h });
+    const place = (v) => {
       const r = lerpRect(from, to, v);
-      r.y -= Math.sin(v * Math.PI) * 56;
-      drawStamp(ctx, flight.strokes, r);
-    });
-    await t.to(1, 560, FAST_OUT_SLOW_IN);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, flightCanvas.width, flightCanvas.height);
+      const k = r.w / from.w;
+      flightCanvas.style.transform = `translate3d(${r.x - pad2 * k}px, ${r.y - Math.sin(v * Math.PI) * 56 - pad2 * k}px, 0) scale(${k})`;
+    };
+    place(0);
+    flightCanvas.hidden = false;
+    await new Animated(0, place).to(1, 560, FAST_OUT_SLOW_IN);
+    flightCanvas.hidden = true;
   }
 
+  /**
+   * «Пружинка» ячейки или кольца, получивших рисунок: кусок готового оборота копируется в маленький
+   * слой над картой, и масштабируется уже он — оборот целиком не перерисовывается.
+   */
   function popTarget(target) {
     s.pop = target;
+    drawBack(); // на обороте уже новая отметка
+    const w = backCanvas.width;
+    const h = backCanvas.height;
+    let box;
+    if (target.ring) {
+      const c = ringCenter(w, h, target.cell);
+      const r = ringRadius(w) * 1.15;
+      box = { x: c.x - r, y: c.y - r, w: 2 * r, h: 2 * r };
+    } else {
+      const r = cellRect(w, h, target.cell);
+      const m = cellStroke(w) * 0.5;
+      box = { x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m };
+    }
+    popCanvas.width = Math.round(box.w);
+    popCanvas.height = Math.round(box.h);
+    popCanvas.getContext("2d").drawImage(backCanvas, box.x, box.y, box.w, box.h, 0, 0, popCanvas.width, popCanvas.height);
+    place(popCanvas, box.x / w, box.y / h, box.w / w, box.h / h);
+    popCanvas.style.transform = "scale(1)";
+    popCanvas.hidden = false;
+    const token = (popToken += 1);
     springPop((v) => {
-      popScale = v;
-      drawBack();
+      if (token === popToken) popCanvas.style.transform = `scale(${v})`;
     }).then(() => {
+      if (token !== popToken) return;
+      popCanvas.hidden = true;
       s.pop = null;
-      drawBack();
     });
   }
 

@@ -119,11 +119,16 @@ export class DrawingPad {
     requestAnimationFrame(() => this.loop());
   }
 
-  draw() {
-    const ctx = this.canvas.getContext("2d");
-    const size = this.canvas.width;
-    const dpr = size / (this.canvas.clientWidth || 1);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  /**
+   * Фон, рамка и уже законченные штрихи «запечены» в отдельный слой: пока палец ведёт линию,
+   * каждый кадр — это одна копия слоя и один текущий штрих, а не перерисовка всего холста.
+   */
+  bakedLayer(size, dpr) {
+    const b = this.baked;
+    if (b && b.strokes === this.strokes && b.canvas.width === size) return b.canvas;
+    const canvas = b?.canvas ?? document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
     ctx.fillStyle = COLORS.red;
     ctx.fillRect(0, 0, size, size);
     ctx.fillStyle = paperPattern(ctx);
@@ -138,8 +143,21 @@ export class DrawingPad {
     ctx.strokeStyle = COLORS.ink;
     ctx.lineWidth = border;
     ctx.strokeRect(margin + border / 2, margin + border / 2, css - 2 * margin - border, css - 2 * margin - border);
-
     drawStamp(ctx, this.strokes, inner);
+    this.baked = { canvas, strokes: this.strokes };
+    return canvas;
+  }
+
+  draw() {
+    const ctx = this.canvas.getContext("2d");
+    const size = this.canvas.width;
+    if (!size) return;
+    const dpr = size / (this.canvas.clientWidth || 1);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this.bakedLayer(size, dpr), 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const inner = this.innerRect();
     if (this.current) {
       drawMarkerStroke(
         ctx,

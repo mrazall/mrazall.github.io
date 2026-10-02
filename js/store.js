@@ -50,10 +50,8 @@ export function makeCard(total, drawings, giftDrawings) {
 }
 
 export class Store {
-  /** seed — сколько отметок у новой карты (демо показывает карту не пустой). */
-  constructor({ key = "kom_card", seed = 0 } = {}) {
+  constructor({ key = "kom_card" } = {}) {
     this.key = key;
-    this.seed = seed;
     this.card = null;
     this.listeners = new Set();
     this.decoded = new Map();
@@ -82,7 +80,7 @@ export class Store {
       // Повреждено или записано более новой версией сайта — не затираем, а откладываем в сторону.
       localStorage.setItem(`${this.key}_unreadable_${Date.now()}`, raw);
     }
-    this.data = data ?? upgraded({ total: this.seed, marks: {}, gifts: {} });
+    this.data = data ?? upgraded({ total: 0, marks: {}, gifts: {} });
     if (!data) this.save();
     // Просим браузер не стирать карту при нехватке места. Работает не везде и не всегда соглашается —
     // карта от этого не зависит, это лишь дополнительная страховка.
@@ -120,7 +118,7 @@ export class Store {
     return this.publish();
   }
 
-  /** Удалить все отметки и рисунки в этой карте, сохранив пустую карту и обходя demo seed. */
+  /** Удалить все отметки и рисунки: на месте карты остаётся пустая. */
   deleteCard() {
     const before = this.data;
     this.data = upgraded({ total: 0, marks: {}, gifts: {} });
