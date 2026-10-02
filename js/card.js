@@ -22,7 +22,7 @@ export function loadArt() {
 
 export const ringImage = () => art.card_ring;
 
-/** Рисунок отметки, иначе (стартовые отметки демо-карты) — рукописная буква-заглушка. */
+/** Рисунок отметки; если его почему-то нет — рукописная буква-заглушка. */
 const markFor = (card, n) => card.drawings.get(n) ?? fallbackMark(n);
 
 function base(ctx, w, h) {
@@ -113,7 +113,51 @@ function drawFrontCounter(ctx, w, h, card) {
  * Оборот. opts: sheet, highlightCell, pulse (0..1), pop {cell, scale, ring}, giftFocus {number, mode: pulse|steady}.
  * Выданный подарок — рисунок бариста на кольце ряда.
  */
+const backLayers = new WeakMap();
+
 export function renderBack(canvas, card, opts = {}) {
+  // Сетка, бумага и старые отметки не меняются при пульсации.
+  // Пружинящий элемент требует отдельного полного кадра.
+  if (opts.pop) return renderBackFull(canvas, card, opts);
+  const sheet = opts.sheet ?? 0;
+  let cached = backLayers.get(canvas);
+  if (!cached || cached.card !== card || cached.sheet !== sheet ||
+      cached.layer.width !== canvas.width || cached.layer.height !== canvas.height) {
+    const layer = document.createElement("canvas");
+    layer.width = canvas.width;
+    layer.height = canvas.height;
+    renderBackFull(layer, card, { sheet });
+    cached = { card, sheet, layer };
+    backLayers.set(canvas, cached);
+  }
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.drawImage(cached.layer, 0, 0);
+  const pulse = opts.pulse ?? 0;
+  if (opts.highlightCell != null) {
+    const r = cellRect(w, h, opts.highlightCell);
+    const stroke = cellStroke(w);
+    ctx.fillStyle = `rgba(247,240,232,${0.1 + 0.2 * pulse})`;
+    ctx.fillRect(r.x + stroke, r.y + stroke, r.w - 2 * stroke, r.h - 2 * stroke);
+    const number = sheet * CELLS + opts.highlightCell + 1;
+    if (card && number <= card.total) drawStamp(ctx, markFor(card, number), cellInk(w, h, opts.highlightCell));
+  }
+  if (!card || !opts.giftFocus) return;
+  for (let row = 0; row < ROWS; row++) {
+    const number = giftNumberFor(sheet, row);
+    if (opts.giftFocus.number !== number || card.giftState(number) === "used") continue;
+    const c = ringCenter(w, h, row);
+    ctx.fillStyle = `rgba(247,240,232,${opts.giftFocus.mode === "pulse" ? 0.1 + 0.2 * pulse : 0.2})`;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, ringRadius(w) * 0.82, 0, 2 * Math.PI);
+    ctx.fill();
+    const mark = card.giftDrawings.get(number);
+    if (mark) drawStamp(ctx, mark, ringInk(w, h, row));
+  }
+}
+
+function renderBackFull(canvas, card, opts = {}) {
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
   const h = canvas.height;

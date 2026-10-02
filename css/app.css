@@ -59,8 +59,9 @@ button:disabled { cursor: default; }
 .stage { position: absolute; inset: 0; }
 .stage > * { position: absolute; }
 
-.card-slot { left: 0; top: 0; perspective: 1500px; cursor: pointer; outline: none; }
+.card-slot { left: 0; top: 0; perspective: 1500px; cursor: pointer; outline: none; transform-origin: 0 0; will-change: transform; }
 .lift, .flip { position: absolute; inset: 0; transform-style: preserve-3d; }
+.flip { will-change: transform; }
 .face {
   position: absolute;
   inset: 0;

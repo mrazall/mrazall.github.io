@@ -147,6 +147,9 @@ export function mountCardScreen(root, store) {
     const H = stageEl.clientHeight;
     if (!W || !H) return;
     L = layout(W, H);
+    // Размер поверхности постоянен: движение и уменьшение — только transform.
+    slot.style.width = `${L.view.w}px`;
+    slot.style.height = `${L.view.h}px`;
     dpr = window.devicePixelRatio || 1;
     const maxW = Math.max(L.view.w, L.open.w) * dpr;
     for (const c of [frontCanvas, backCanvas]) {
@@ -165,12 +168,10 @@ export function mountCardScreen(root, store) {
   function frame() {
     if (!L) return;
     const box = lerpRect(L.view, L.open, move.value);
-    Object.assign(slot.style, { transform: `translate(${box.x}px, ${box.y}px)`, width: `${box.w}px`, height: `${box.h}px` });
+    slot.style.transform = `translate3d(${box.x}px, ${box.y}px, 0) scale(${box.w / L.view.w})`;
     const r = rotation.value;
     liftEl.style.transform = `scale(${1 + 0.05 * liftA.value})`;
     flipEl.style.transform = `rotateY(${r}deg)`;
-    slot.style.setProperty("--shadow-y", `${6 + 18 * liftA.value}px`);
-    slot.style.setProperty("--shadow-blur", `${14 + 30 * liftA.value}px`);
     const shade = (1 - Math.abs(Math.cos((r * Math.PI) / 180))) * 0.35;
     shades.forEach((x) => (x.style.opacity = shade));
     if (r > 1 && r < 90) drawFront(r / 90);
@@ -203,7 +204,8 @@ export function mountCardScreen(root, store) {
   // Мерцание ячейки и кольца — пока карта открыта.
   const pulseLoop = (now) => {
     if (destroyed) return;
-    if (isOpen() || rotation.value > 90) {
+    if (!document.hidden && rotation.value === 180 && move.value === 1 &&
+        (targetCell() !== null || giftFocus()?.mode === "pulse")) {
       pulse = 0.5 - 0.5 * Math.cos((now / 900) * Math.PI);
       drawBack();
     }
