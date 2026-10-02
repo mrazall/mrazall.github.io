@@ -2,10 +2,12 @@
 // Второй экран (#/keep) — сохранить карту в файл или восстановить из файла.
 
 import { loadArt } from "./card.js";
-import { initFpsMeter } from "./fps.js";
+import { initInstall } from "./install.js";
 import { mountCardScreen } from "./cardScreen.js";
 import { mountKeepScreen } from "./keep.js";
 import { Store } from "./store.js";
+
+initInstall(); // событие «сайт можно установить» приходит рано — слушаем с самого начала
 
 const store = new Store();
 
@@ -27,8 +29,6 @@ async function boot() {
   }
   window.addEventListener("hashchange", route);
   route();
-  initFpsMeter(); // только по адресу ?fps
-
   // Офлайн-оболочка — только на HTTPS (в бою); на локальном http не мешает разработке.
   if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 }

@@ -6,7 +6,7 @@ import { FAST_OUT_SLOW_IN, FLIP, LINEAR_OUT_SLOW_IN, bake, finished, lerp, reduc
 import { inkImage, renderBack, renderFront, ringImage } from "./card.js";
 import { ASPECT, ROWS, cellInk, cellOf, cellRect, cellStroke, ringCenter, ringInk, ringRadius, sheetOf, sheetOfGift } from "./geometry.js";
 import { COLORS, drawStamp, pixelRatio } from "./marker.js";
-import { iosBrowserTab } from "./keep.js";
+import { dismissInstall, installMode, onInstallChange, promptInstall } from "./install.js";
 import { DrawingPad, verifyDrawing } from "./pad.js";
 import { el, markerRing, stampsWord } from "./screens.js";
 import { userMessage } from "./store.js";
@@ -49,7 +49,14 @@ export function mountCardScreen(root, store) {
           <button class="gift-badge" hidden><canvas></canvas><span class="link small underline">у вас есть подарочный кофе</span></button>
         </div>
         <div class="keep-hint" hidden>
-          <p></p>
+          <div class="install" hidden>
+            <p class="install-how" hidden></p>
+            <div class="install-row">
+              <button class="link small underline install-go">добавить на экран «Домой»</button>
+              <button class="install-x" aria-label="не предлагать">×</button>
+            </div>
+          </div>
+          <p class="where"></p>
           <a class="link small underline" href="#/keep">сохранить или перенести</a>
         </div>
         <div class="topbar">
@@ -89,6 +96,8 @@ export function mountCardScreen(root, store) {
   const hint = $(".hint");
   const badge = $(".gift-badge");
   const keepHint = $(".keep-hint");
+  const installEl = $(".install");
+  const installHow = $(".install-how");
   const topbar = $(".topbar");
   const sheetsEl = $(".sheets");
   const sheetLabel = $(".sheet-label");
@@ -352,9 +361,11 @@ export function mountCardScreen(root, store) {
     slot.setAttribute("aria-label", c ? `карта лояльности: ${c.stamps} из ${c.req} отметок, подарков: ${c.available}` : "карта лояльности");
     // Тихо, внизу: где живёт карта и как её не потерять. На iPhone в Safari — ещё и про экран «Домой».
     keepHint.hidden = !c;
-    keepHint.querySelector("p").textContent = iosBrowserTab()
-      ? "карта хранится в этом браузере — добавьте сайт на экран «Домой»"
-      : "карта хранится в этом браузере";
+    keepHint.querySelector(".where").textContent = "карта хранится в этом браузере";
+    // Ещё тише: предложение добавить карту на экран «Домой» (если это возможно и гость не отказался).
+    const offer = c ? installMode() : null;
+    installEl.hidden = !offer;
+    if (!offer) installHow.hidden = true;
     const showSheets = isOpen() && lastSheet() > 0;
     sheetsEl.hidden = !showSheets;
     if (showSheets) {
@@ -842,6 +853,20 @@ export function mountCardScreen(root, store) {
   const onKey = (e) => e.key === "Escape" && close();
   document.addEventListener("keydown", onKey);
 
+  $(".install-go").addEventListener("click", () => {
+    if (installMode() === "prompt") return promptInstall();
+    // iPhone: системного диалога нет — показываем, куда нажать. Карта на экране «Домой» хранится
+    // отдельно от вкладки, поэтому уже начатую карту сначала нужно сохранить в файл.
+    const c = card();
+    const started = !!c && (c.total > 0 || c.giftDrawings.size > 0);
+    installHow.textContent = started
+      ? "сначала сохраните карту в файл (ниже) — на экране «Домой» она хранится отдельно. затем: «Поделиться» → «На экран „Домой“» и восстановите карту из файла"
+      : "нажмите «Поделиться» в браузере, затем «На экран „Домой“»";
+    installHow.hidden = !installHow.hidden;
+  });
+  $(".install-x").addEventListener("click", dismissInstall);
+  const stopInstall = onInstallChange(() => render());
+
   const unsubscribe = store.subscribe(() => render());
   const ro = new ResizeObserver(resize);
   ro.observe(stageEl);
@@ -854,6 +879,7 @@ export function mountCardScreen(root, store) {
     clearTimeout(nextStep);
     stopTimeline();
     popAnim?.cancel();
+    stopInstall();
     unsubscribe();
     ro.disconnect();
     pad?.destroy();

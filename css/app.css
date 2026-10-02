@@ -103,6 +103,12 @@ canvas.pop { position: absolute; display: block; pointer-events: none; will-chan
 /* iPhone в Safari: карту надёжнее держать на экране «Домой» — иначе Safari может стереть данные сайта. */
 .keep-hint { left: 24px; right: 24px; bottom: max(4px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; text-align: center; }
 .keep-hint p { margin: 0; font-size: 14px; line-height: 1.3; color: rgba(247, 240, 232, 0.45); }
+/* Тихое предложение добавить карту на экран «Домой». */
+.install { display: flex; flex-direction: column; align-items: center; margin-bottom: 2px; }
+.install-row { display: flex; align-items: center; gap: 2px; }
+.install-go { color: var(--marker-faded); }
+.install-x { min-width: 40px; min-height: 40px; font-size: 22px; line-height: 1; color: rgba(247, 240, 232, 0.4); }
+.keep-hint .install-how { max-width: 320px; margin-bottom: 2px; color: var(--marker-faded); }
 
 /* ── «карта хранится в этом браузере»: сохранить / восстановить */
 .keep { background: var(--table); overflow-y: auto; }

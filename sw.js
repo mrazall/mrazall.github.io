@@ -1,6 +1,6 @@
 // Офлайн-оболочка: сайт открывается с экрана «Домой» мгновенно и без сети.
 // Сервера нет — карта в localStorage, так что без сети работает всё.
-const VERSION = "kom-v9";
+const VERSION = "kom-v10";
 const SHELL = [
   "./",
   "index.html",
@@ -18,7 +18,7 @@ const SHELL = [
   "js/cardScreen.js",
   "js/backup.js",
   "js/keep.js",
-  "js/fps.js",
+  "js/install.js",
   "assets/card_front_ink.png",
   "assets/card_front_white.png",
   "assets/card_back_strip.png",
