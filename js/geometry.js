@@ -1,22 +1,22 @@
-// Координаты оборота карты, измеренные по выпрямленному скану (1716 × 1100 px) —
-// те же числа, что CardGeometry.kt в приложении. Всё в долях размера карты.
+// Координаты оборота карты по векторному макету (85 × 55 мм → 1716 × 1110 px): квадрат 7 мм, шаг 10 мм.
+// Те же числа, что CardGeometry.kt в приложении; печатает их docs/internal/build_card_art.py.
 
 const SCAN_W = 1716;
-const SCAN_H = 1100;
+const SCAN_H = 1110;
 
 export const ASPECT = SCAN_W / SCAN_H;
 export const COLUMNS = 6;
 export const ROWS = 5;
 export const CELLS = COLUMNS * ROWS;
-export const STRIP_LEFT = 1235 / SCAN_W;
+export const STRIP_LEFT = 1262 / SCAN_W;
 
-const GRID_LEFT = 42;
-const GRID_TOP = 39;
-const PITCH_X = 202.8;
-const PITCH_Y = 206.5;
-const CELL_W = 143;
-const CELL_H = 145;
-const CELL_STROKE = 17.5;
+const GRID_LEFT = 80.7;
+const GRID_TOP = 80.8;
+const PITCH_X = 201.9;
+const PITCH_Y = 201.9;
+const CELL_W = 141.3;
+const CELL_H = 141.3;
+const CELL_STROKE = 16.4;
 
 export function cellRect(w, h, cell) {
   const col = cell % COLUMNS;
@@ -39,11 +39,11 @@ export function cellInk(w, h, cell) {
 }
 
 export const ringCenter = (w, h, row) => ({
-  x: (1330 / SCAN_W) * w,
+  x: (1362 / SCAN_W) * w,
   y: ((GRID_TOP + row * PITCH_Y + CELL_H / 2) / SCAN_H) * h,
 });
 
-export const ringRadius = (w) => (74 / SCAN_W) * w;
+export const ringRadius = (w) => (68 / SCAN_W) * w;
 
 /** Где рисует бариста, выдавая подарок: квадрат по кольцу, буква того же размера, что в ячейке. */
 export function ringInk(w, h, row) {

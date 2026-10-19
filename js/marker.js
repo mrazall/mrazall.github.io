@@ -8,8 +8,8 @@ export const pixelRatio = () => Math.min(window.devicePixelRatio || 1, 2);
 
 export const MARKER_WIDTH = 0.075; // толщина маркера в долях стороны квадрата
 export const COLORS = {
-  red: "#E3352A",
-  ink: "#261614",
+  red: "#BF2C2B",
+  ink: "#080400",
   marker: "#F7F0E8",
   table: "#1B1413",
 };
